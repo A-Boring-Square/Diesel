@@ -4,7 +4,7 @@ It offers:
 
 Threads – Easy-to-use abstraction over OS threads.
 
-Mutexes & synchronization – Cross-platform mutexes, spinlocks, and condition variables.
+Mutexes & synchronization – Cross-platform mutexes.
 
 Job system - Simple job queues for task parallelism.
 
