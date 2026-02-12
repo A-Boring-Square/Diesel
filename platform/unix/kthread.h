@@ -1,0 +1,11 @@
+#ifndef DIESEL_KTHREAD_H
+#define DIESEL_KTHREAD_H
+
+#ifdef DIESEL_INTERNAL_IMPL_UNIX
+
+#else
+
+#endif
+
+
+#endif // DIESEL_KTHREAD_H
