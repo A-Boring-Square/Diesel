@@ -1,10 +1,10 @@
 #include <stdint.h>
 
 /**
- * @struct GThreadContext
- * @brief Execution context for a Diesel green thread.
+ * @struct FiberContext
+ * @brief Execution context for a Diesel Fiber.
  *
- * Green threads are user-space scheduled and managed by Diesel rather than
+ * fibers are user-space scheduled and managed by Diesel rather than
  * the operating system. They do not correspond 1:1 with OS threads and are
  * typically multiplexed onto a smaller number of kernel threads.
  *
@@ -14,10 +14,10 @@
  * The @c user_data field is a user-defined pointer to data available to
  * the thread.
 */
-typedef struct GThreadContext {
-    uintptr_t ID; ///< Diesel-assigned green thread identifier
+typedef struct FiberContext {
+    uintptr_t ID; ///< Diesel-assigned fiber identifier
     void* user_data; ///< User-provided pointer
-} GThreadContext;
+} FiberContext;
 
 /**
  * @struct KThreadContext
