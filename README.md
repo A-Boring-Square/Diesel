@@ -1,13 +1,15 @@
-Diesel is a lightweight, header-only C library providing cross-platform concurrency primitives.
+## Diesel is a lightweight, header-only C library for cross-platform concurrency.
 
-It offers:
+### It provides:
 
-Threads – Easy-to-use abstraction over OS threads.
+* Threads — Simple, portable abstractions over OS threads.
 
-Mutexes & synchronization – Cross-platform mutexes.
+* Fibers — Run thousands of lightweight fibers concurrently.
 
-Job system - Simple job queues for task parallelism.
+* Mutexes & synchronization — Cross-platform locking and sync primitives.
 
-Emulated scheduling - For single-threaded or testing environments, with round-robin random time slices.
+* Job system — Easy job queues for task-based parallelism.
 
-Header-only: just include `diesel.h` and you’re ready to go - no compilation or linking required.
+* Emulated backend — For single-threaded or testing environments.
+
+* Header-only: just include diesel.h and go. No separate compilation or linking required.
