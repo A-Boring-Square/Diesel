@@ -84,8 +84,8 @@
  *   - On Windows, it defaults to 1 MB.
  *   - On POSIX systems, it defaults to `PTHREAD_STACK_MIN` if available, 
  *     otherwise 1 MB.
- *   - On emulated this is 1 KB because malocing more than that is not a good idea
- *
+ * @note This does not apply to KThreads when runing under the Emulated backend
+ * as they just use the program's stack
  * Users can override this macro by defining `KTHREAD_STACK_SIZE` 
  * before including `diesel.h`.
  *

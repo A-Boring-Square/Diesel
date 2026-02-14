@@ -32,6 +32,7 @@
 
 #else
     #define DIESEL_INTERNAL_IMPL_EMULATED
+    #define DIESEL_USING_EMULATED_BACKEND
     #include "emulated/kthread.h"
     #include "emulated/ksync.h"
 
@@ -47,11 +48,19 @@
     #include "unix/ksync.h"
 
 #else
+    #define DIESEL_USING_EMULATED_BACKEND
     #include "emulated/kthread.h"
     #include "emulated/ksync.h"
 
 #endif // platform include
 
 #endif // DIESEL_INTERNAL_IMPL_PLATFORM
+
+#ifdef DIESEL_USING_EMULATED_BACKEND
+
+#define EMULATED_KTHREAD_GUARD() KThreadTick()
+#else
+#define EMULATED_KTHREAD_GUARD() ((void)0)
+#endif
 
 #endif // DIESEL_PLATFORM_H
