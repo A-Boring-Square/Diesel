@@ -131,7 +131,7 @@ void SleepKThread(int delay_ms) {
 
 /**
  * @brief Opaque handle to a kernel thread.
- */
+*/
 typedef struct KThread KThread;
 
 /**
@@ -144,7 +144,7 @@ typedef struct KThread KThread;
  * @param user_ptr User-defined pointer passed to the worker.
  *
  * @return Pointer to a new @ref KThread on success, or NULL on failure.
- */
+*/
 KThread* CreateKThread(KThreadWorker worker, void* user_ptr);
 
 /**
@@ -155,7 +155,7 @@ KThread* CreateKThread(KThreadWorker worker, void* user_ptr);
  * @param thread Pointer to the thread to destroy.
  *
  * @return true on success, false on failure.
- */
+*/
 bool DestroyKThread(KThread* thread);
 
 /**
@@ -167,7 +167,7 @@ bool DestroyKThread(KThread* thread);
  * @param priority New priority value.
  *
  * @return true on success, false on failure.
- */
+*/
 bool SetKThreadPriority(KThread* thread, ThreadPriority priority);
 
 /**
@@ -179,7 +179,7 @@ bool SetKThreadPriority(KThread* thread, ThreadPriority priority);
  * @param thread Pointer to the thread to start.
  *
  * @return true on success, false on failure.
- */
+*/
 bool StartKThread(KThread* thread);
 
 /**
@@ -191,7 +191,7 @@ bool StartKThread(KThread* thread);
  *
  * @return An integer result or exit code provided by the thread, or a
  *         platform-specific error code on failure.
- */
+*/
 int JoinKThread(KThread* thread);
 
 /**
@@ -199,14 +199,14 @@ int JoinKThread(KThread* thread);
  *
  * This hints to the scheduler that the current thread is willing to
  * give up the CPU.
- */
+*/
 void YieldKThread();
 
 /**
  * @brief Sleep the current thread for a given duration.
  *
  * @param delay_ms Time to sleep in milliseconds.
- */
+*/
 void SleepKThread(int delay_ms);
 
 #endif
