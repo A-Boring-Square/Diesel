@@ -10,6 +10,10 @@ typedef void (*KThreadWorker)(KThreadContext*);
 #define WINDOWS_LEAN_AND_MEAN
 #include <Windows.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct KThread {
     HANDLE handle;
     DWORD id;

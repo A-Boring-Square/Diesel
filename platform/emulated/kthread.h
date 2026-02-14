@@ -10,6 +10,10 @@ typedef void (*KThreadWorker)(KThreadContext* ctx);
 
 #ifdef DIESEL_INTERNAL_IMPL_EMULATED
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum KThreadState {
     KTHREAD_READY,
     KTHREAD_RUNNING,
@@ -162,6 +166,10 @@ void KThreadTick() {
     }
     g_scheduler.count -= shift;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #else
 

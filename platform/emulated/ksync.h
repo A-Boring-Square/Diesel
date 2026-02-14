@@ -7,6 +7,10 @@
 
 #ifdef DIESEL_INTERNAL_IMPL_EMULATED
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef void KMutex;
 
 static inline KMutex* InitKMutex(void) { return NULL; }
@@ -16,6 +20,11 @@ static inline bool DestroyKMutex(KMutex* mutex) { (void)mutex; return true; }
 static inline void LockKMutex(KMutex* mutex) { (void)mutex; }
 
 static inline void UnlockKMutex(KMutex* mutex) { (void)mutex; }
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #else
 

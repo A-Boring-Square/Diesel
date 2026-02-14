@@ -7,6 +7,10 @@
 
 #include <stdlib.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #if defined(SYNC_USE_USERMODE_LOCKS) && defined(__linux__)
 
 /* ================= User-mode futex mutex (Linux) ================= */
@@ -101,6 +105,11 @@ static inline void UnlockKMutex(KMutex* mutex) {
 }
 
 #endif // SYNC_USE_USERMODE_LOCKS
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #else
 

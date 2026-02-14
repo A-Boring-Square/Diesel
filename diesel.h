@@ -99,6 +99,11 @@
 #endif
 #endif
 
+#ifndef FIBER_MULTIPLEX_DEFAULT_THREAD_COUNT
+#define FIBER_MULTIPLEX_DEFAULT_THREAD_COUNT 2
+#endif
+
+
 #ifndef DIESEL_NO_THREAD_LOCAL_STORAGE
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
 #define TLS _Thread_local

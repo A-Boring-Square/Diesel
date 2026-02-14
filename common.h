@@ -1,3 +1,5 @@
+#ifndef DIESEL_COMMON_H
+#define DIESEL_COMMON_H
 #include <stdint.h>
 
 /**
@@ -52,3 +54,4 @@ typedef enum ThreadPriority {
     THREAD_PRIORITY_DEFAULT,  ///< Default scheduling priority
     THREAD_PRIORITY_HIGH,    ///< Higher priority than normal execution
 } ThreadPriority;
+#endif // DIESEL_COMMON_H

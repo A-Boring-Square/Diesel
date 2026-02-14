@@ -7,6 +7,10 @@
 #define WINDOWS_LEAN_AND_MEAN
 #include <Windows.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef SYNC_USE_USERMODE_LOCKS
 
 typedef struct KMutex {

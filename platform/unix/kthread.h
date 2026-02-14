@@ -13,6 +13,10 @@ typedef void (*KThreadWorker)(KThreadContext*);
 #include <sched.h>
 #include <time.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct KThread {
     pthread_t thread;
     pthread_mutex_t start_mtx;
@@ -169,6 +173,10 @@ void SleepKThread(int delay_ms) {
     ts.tv_nsec = (delay_ms % 1000) * 1000000L;
     nanosleep(&ts, NULL);
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #else
 

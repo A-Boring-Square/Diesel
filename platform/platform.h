@@ -20,6 +20,7 @@
 */
 #ifdef DIESEL_INTERNAL_IMPL_PLATFORM
 
+
 #if defined(_WIN32) || defined(_WIN64)
     #define DIESEL_INTERNAL_IMPL_WINDOWS
     #include "windows/kthread.h"
@@ -38,7 +39,12 @@
 
 #endif // platform selection
 
+#include "fiber.h"
+
+
 #else
+
+
 #if defined(_WIN32) || defined(_WIN64)
     #include "windows/kthread.h"
     #include "windows/ksync.h"
@@ -50,14 +56,16 @@
 #else
     #define DIESEL_USING_EMULATED_BACKEND
     #include "emulated/kthread.h"
-    #include "emulated/ksync.h"
+
 
 #endif // platform include
+
+#include "fiber.h"
+
 
 #endif // DIESEL_INTERNAL_IMPL_PLATFORM
 
 #ifdef DIESEL_USING_EMULATED_BACKEND
-
 #define EMULATED_KTHREAD_GUARD() KThreadTick()
 #else
 #define EMULATED_KTHREAD_GUARD() ((void)0)
