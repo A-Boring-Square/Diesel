@@ -27,15 +27,13 @@ struct Fiber {
     FiberState state;
     void* os_fiber_handle;  // Stores Windows fiber pointer OR POSIX ucontext_t pointer
     void* stack_ptr;        // Tracked explicitly for cleanup on Linux/Unix
-    Fiber* next;
+    Fiber* next;            // Clean standard pointer link
 };
 
 typedef struct FiberSystem {
-#ifdef DIESEL_INTERNAL_IMPL_EMULATED
-    Fiber* run_queue;       // Simple pointer for single-threaded emulation
-#else
-    uintptr_t run_queue;    // Tagged pointer for multi-threaded lock-free safety
-#endif
+    Fiber* head;            // Clean FIFO head pointer
+    Fiber* tail;            // Clean FIFO tail pointer
+    KMutex* queue_mutex;    // Automatically handles No-Ops under Emulation!
     KThread** workers;
     int worker_count;
     bool running;
@@ -65,135 +63,116 @@ __thread Fiber* t_current_running_fiber = NULL;
 #endif
 #endif
 
-/* ---------------- Queue Routing ---------------- */
-#ifdef DIESEL_INTERNAL_IMPL_EMULATED
 static void PushFiber(Fiber* f) {
     if (!f) return;
-    f->next = g_fiber_system.run_queue;
-    g_fiber_system.run_queue = f;
+    f->next = NULL;
+
+    LockKMutex(g_fiber_system.queue_mutex);
+    if (!g_fiber_system.tail) {
+        g_fiber_system.head = g_fiber_system.tail = f;
+    } else {
+        g_fiber_system.tail->next = f;
+        g_fiber_system.tail = f;
+    }
+    UnlockKMutex(g_fiber_system.queue_mutex);
 }
 
 static Fiber* PopFiber(void) {
-    Fiber* f = g_fiber_system.run_queue;
-    if (f) g_fiber_system.run_queue = f->next;
-    return f;
-}
-#else
-#define PACK_TAGGED(ptr, tag)   ((uintptr_t)(ptr) | ((uintptr_t)(tag) << 48))
-#define UNPACK_PTR(tagged)       ((Fiber*)((uintptr_t)(tagged) & 0x0000FFFFFFFFFFFFULL))
-#define UNPACK_TAG(tagged)       ((uintptr_t)(tagged) >> 48)
+    LockKMutex(g_fiber_system.queue_mutex);
+    if (!g_fiber_system.head) {
+        UnlockKMutex(g_fiber_system.queue_mutex);
+        return NULL;
+    }
 
-static void PushFiber(Fiber* f) {
-    uintptr_t current_head;
-    uintptr_t next_head;
-    do {
-        current_head = g_fiber_system.run_queue;
-        f->next = UNPACK_PTR(current_head);
-        uintptr_t next_tag = (UNPACK_TAG(current_head) + 1) & 0xFFFF;
-        next_head = PACK_TAGGED(f, next_tag);
-#if defined(_MSC_VER)
-        if (_InterlockedCompareExchange64((long long volatile*)&g_fiber_system.run_queue, (long long)next_head, (long long)current_head) == (long long)current_head)
-            break;
-#else
-        if (__atomic_compare_exchange_n(&g_fiber_system.run_queue, &current_head, next_head, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST))
-            break;
-#endif
-    } while (1);
-}
+    Fiber* f = g_fiber_system.head;
+    g_fiber_system.head = f->next;
+    if (!g_fiber_system.head) {
+        g_fiber_system.tail = NULL;
+    }
+    UnlockKMutex(g_fiber_system.queue_mutex);
 
-static Fiber* PopFiber(void) {
-    uintptr_t current_head;
-    Fiber* f;
-    do {
-        current_head = g_fiber_system.run_queue;
-        f = UNPACK_PTR(current_head);
-        if (!f) return NULL;
-        Fiber* next_node = f->next;
-        uintptr_t next_tag = (UNPACK_TAG(current_head) + 1) & 0xFFFF;
-        next_head = PACK_TAGGED(next_node, next_tag);
-#if defined(_MSC_VER)
-        if (_InterlockedCompareExchange64((long long volatile*)&g_fiber_system.run_queue, (long long)next_head, (long long)current_head) == (long long)current_head)
-            break;
-#else
-        if (__atomic_compare_exchange_n(&g_fiber_system.run_queue, &current_head, next_head, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST))
-            break;
-#endif
-    } while (1);
     f->next = NULL;
     return f;
 }
-#endif
 
-/* ---------------- Native Only Worker Entry Stubs ---------------- */
 #ifndef DIESEL_INTERNAL_IMPL_EMULATED
 #if defined(_WIN32) || defined(_WIN64)
 void WINAPI NativeFiberEntry(LPVOID param) {
     Fiber* f = (Fiber*)param;
-    if (f && f->worker) f->worker(&f->ctx);
+    if (f && f->worker) {
+        f->worker(&f->ctx);
+    }
     f->state = FIBER_FINISHED;
-    SwitchToFiber(t_scheduler_fiber);
+    if (t_scheduler_fiber) {
+        SwitchToFiber(t_scheduler_fiber);
+    }
 }
-#else // POSIX Linux/Unix Execution Stub
+#else 
 void NativeFiberEntryPOSIX(void) {
     Fiber* f = t_current_running_fiber;
     if (f && f->worker) f->worker(&f->ctx);
     f->state = FIBER_FINISHED;
-    // Context switch register state back to the background scheduler loop thread
     swapcontext((ucontext_t*)f->os_fiber_handle, (ucontext_t*)t_scheduler_fiber);
 }
 #endif
 #endif
 
-/* ---------------- Core Engine Thread Loop ---------------- */
 void FiberSchedulerLoop(KThreadContext* _unused) {
     (void)_unused;
-    if (!g_fiber_system.running) return;
 
 #ifndef DIESEL_INTERNAL_IMPL_EMULATED
 #if defined(_WIN32) || defined(_WIN64)
-    if (!t_scheduler_fiber) t_scheduler_fiber = ConvertThreadToFiber(NULL);
-#else // Initialize thread context infrastructure under POSIX
+    if (!IsThreadAFiber()) {
+        t_scheduler_fiber = ConvertThreadToFiber(NULL);
+    } else {
+        t_scheduler_fiber = GetCurrentFiber();
+    }
+#else 
     if (!t_scheduler_fiber) {
         t_scheduler_fiber = DIESEL_MEM_ALLOC(sizeof(ucontext_t));
     }
 #endif
 #endif
 
-    Fiber* f = PopFiber();
-    if (!f) {
-        SleepKThread(1);
-        return;
-    }
+    while (g_fiber_system.running) {
+        Fiber* f = PopFiber();
+        if (!f) {
+            SleepKThread(1);
+            continue;
+        }
 
-    if (f->state == FIBER_READY || f->state == FIBER_SUSPENDED) {
-        f->state = FIBER_RUNNING;
-        
+        if (f->state == FIBER_READY || f->state == FIBER_SUSPENDED) {
+            f->state = FIBER_RUNNING;
+            
 #ifdef DIESEL_INTERNAL_IMPL_EMULATED
-        g_emulated_current_fiber = f;
-        f->worker(&f->ctx);
-        if (f->state == FIBER_RUNNING) f->state = FIBER_FINISHED;
-        g_emulated_current_fiber = NULL;
+            g_emulated_current_fiber = f;
+            f->worker(&f->ctx);
+            if (f->state == FIBER_RUNNING) f->state = FIBER_FINISHED;
+            g_emulated_current_fiber = NULL;
 #else
-        t_current_running_fiber = f;
+            t_current_running_fiber = f;
 #if defined(_WIN32) || defined(_WIN64)
-        SwitchToFiber(f->os_fiber_handle);
-#else // Swap CPU register contexts natively under Unix / Linux
-        swapcontext((ucontext_t*)t_scheduler_fiber, (ucontext_t*)f->os_fiber_handle);
+            SwitchToFiber(f->os_fiber_handle);
+#else
+            swapcontext((ucontext_t*)t_scheduler_fiber, (ucontext_t*)f->os_fiber_handle);
 #endif
-        t_current_running_fiber = NULL;
+            t_current_running_fiber = NULL;
 #endif
-    }
+        }
 
-    if (f->state == FIBER_SUSPENDED) {
-        PushFiber(f);
+        // Re-queue the fiber safely AFTER it has dropped off the CPU registers
+        if (f->state == FIBER_SUSPENDED) {
+            PushFiber(f);
+        }
     }
 }
 
-/* ---------------- Public Life Cycle ---------------- */
 void InitFiberSys(int worker_threads, ThreadPriority priority) {
     g_fiber_system.worker_count = worker_threads > 0 ? worker_threads : 4;
     g_fiber_system.workers = (KThread**)DIESEL_MEM_ALLOC(sizeof(KThread*) * g_fiber_system.worker_count);
-    g_fiber_system.run_queue = 0;
+    g_fiber_system.head = NULL;
+    g_fiber_system.tail = NULL;
+    g_fiber_system.queue_mutex = InitKMutex(); // Instantiates native mutex OR emulated null stub
     g_fiber_system.running = true;
 
     for (int i = 0; i < g_fiber_system.worker_count; ++i) {
@@ -211,12 +190,14 @@ void ShutdownFiberSys(void) {
 #endif
         DestroyKThread(g_fiber_system.workers[i]);
     }
+
+    DestroyKMutex(g_fiber_system.queue_mutex);
     DIESEL_MEM_FREE(g_fiber_system.workers);
     g_fiber_system.workers = NULL;
-    g_fiber_system.run_queue = 0;
+    g_fiber_system.head = NULL;
+    g_fiber_system.tail = NULL;
 }
 
-/* ---------------- Manipulation API ---------------- */
 Fiber* CreateNewFiber(FiberWorker worker, void* user_data) {
     Fiber* f = (Fiber*)DIESEL_MEM_ALLOC(sizeof(Fiber));
     if (!f) return NULL;
@@ -233,10 +214,10 @@ Fiber* CreateNewFiber(FiberWorker worker, void* user_data) {
 #ifndef DIESEL_INTERNAL_IMPL_EMULATED
 #if defined(_WIN32) || defined(_WIN64)
     f->os_fiber_handle = CreateFiber(0, NativeFiberEntry, f);
-#else // Native POSIX User Context allocation (Linux / UNIX)
+#else 
     ucontext_t* uctx = (ucontext_t*)DIESEL_MEM_ALLOC(sizeof(ucontext_t));
     if (getcontext(uctx) == 0) {
-        size_t stack_sz = 64 * 1024; // 64KB fiber execution frame stack
+        size_t stack_sz = 64 * 1024; 
         f->stack_ptr = DIESEL_MEM_ALLOC(stack_sz);
         uctx->uc_stack.ss_sp = f->stack_ptr;
         uctx->uc_stack.ss_size = stack_sz;
@@ -261,7 +242,6 @@ void YieldFiber(void) {
     if (t_current_running_fiber && t_scheduler_fiber) {
         Fiber* current = t_current_running_fiber;
         current->state = FIBER_SUSPENDED;
-        PushFiber(current);
 #if defined(_WIN32) || defined(_WIN64)
         SwitchToFiber(t_scheduler_fiber);
 #else
@@ -280,7 +260,6 @@ void SleepFiber(int ms) {
         SleepKThread(ms);
     }
 #else
-    // Hardware monotonic time check for true multi-threaded native sleep backing
 #if defined(_WIN32) || defined(_WIN64)
     uint64_t start = GetTickCount64();
     while ((GetTickCount64() - start) < (uint64_t)ms) { YieldFiber(); }
@@ -323,14 +302,15 @@ void JoinFiber(Fiber* f) {
         YieldFiber();
     }
 }
+
 #ifdef __cplusplus
 }
 #endif
 
 #else 
-// Public API
 typedef struct Fiber Fiber;
-typedef void (FiberWorker)(struct FiberContext ctx);
+typedef void (*FiberWorker)(struct FiberContext* ctx);
+
 void InitFiberSys(int worker_threads, ThreadPriority priority);
 void ShutdownFiberSys(void);
 Fiber* CreateNewFiber(FiberWorker worker, void* user_data);
@@ -340,4 +320,5 @@ void SleepFiber(int ms);
 void DestroyFiber(Fiber* f);
 void JoinFiber(Fiber* f);
 #endif
+
 #endif // DIESEL_FIBER_H
